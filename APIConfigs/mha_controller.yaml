@@ -1,0 +1,10 @@
+BaseURL: https://azurebots.centralus.cloudapp.azure.com/api/
+endpoints:
+- banditsequences
+- users
+- banditsequencesmessages
+- bots
+- dialogues
+- usermessages
+- botmessages
+- timeslotsets
