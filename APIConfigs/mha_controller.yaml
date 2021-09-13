@@ -1,4 +1,4 @@
-BaseURL: https://azurebots.centralus.cloudapp.azure.com/api/
+baseURL: https://azurebots.centralus.cloudapp.azure.com/api/
 endpoints:
 - banditsequences
 - users

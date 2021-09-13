@@ -1,4 +1,4 @@
-BaseURL: https://mooclet.canadacentral.cloudapp.azure.com/engine/api/v1/
+baseURL: https://mooclet.canadacentral.cloudapp.azure.com/engine/api/v1/
 endpoints:
 - mooclet
 - version
