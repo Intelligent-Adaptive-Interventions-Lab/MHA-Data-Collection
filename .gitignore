@@ -1,0 +1,5 @@
+# Ignore .DS_store from mac
+.DS_store
+
+# Ignore secure.py from apiconfigs
+apiconfigs/secure.py
