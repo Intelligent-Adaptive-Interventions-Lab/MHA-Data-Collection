@@ -5,6 +5,10 @@
 - [Testing]
 - [Edited]
 
+## 18/09/2021 [Koby]
+- [Added] Concrete Implementation of `DataPipelines/mha_dialog_pipeline.py`
+- [Added] Define new exceptions of `Exceptions/DataPipelineExceptions.py`
+
 ## 13/09/2021 [Koby]
 - [Added] Concrete implementation of `DataDownloader/moocletdatadownloader.py`
 - [Added] `__init__.py` in all the folders
