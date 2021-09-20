@@ -32,13 +32,14 @@ class MturkDataPipeline:
         # get arms
         versions = values[values["variable"] == "version"]
         rewards = values[values["variable"] == var_names["reward"]]
-        print(rewards)
         # rewards = {}
         # for r in var_names["reward"]:
         #     rewards[r] = values[values["variable"] == r]
         parameters = self.mooclet_data["policyparameters"]
         parametershistory = self.mooclet_data["policyparametershistory"]
         parameters = parameters[parameters["mooclet"].isin(self.mooclet_ids)]
+        if parameters.shape[0] > 1:
+            parameters = parameters[parameters["policy"] == var_names["parameterpolicy"]]
         parameters = parameters.sort_values(by=["mooclet"])
         parametershistory = parametershistory[parametershistory["mooclet"].isin(self.mooclet_ids)]
         parametershistory = parametershistory.sort_values(by=["mooclet", "creation_time"])
@@ -119,9 +120,10 @@ class MturkDataPipeline:
 
 
 if __name__ == "__main__":
-    mooclet_id = [20]
+    mooclet_id = [19]
     var_names = {
-        "reward": "mturk_ts_reward_round_3"
+        "reward": "mturk_ts_reward_round_2",
+        "parameterpolicy": 6
     }
     mturk_datapipeline = MturkDataPipeline(mooclet_id)
     mturk_datapipeline(var_names)
