@@ -4,6 +4,7 @@ from DataPipelines.utils import get_valid_parameter_set, get_reward_in_timewindo
 import pandas as pd
 import numpy as np
 import datetime
+import os
 pd.options.mode.chained_assignment = None
 
 
@@ -101,6 +102,8 @@ class MturkDataPipeline:
 
     def step_4_save_output_data(self, name=None):
         now = datetime.datetime.now()
+        if not os.path.isdir("../output_files/"):
+            os.mkdir("../output_files/")
         if not name:
             workbook_name = f"../output_files/mturk_datapipeline_{now}.csv"
         else:
