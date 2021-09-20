@@ -5,6 +5,13 @@
 - [Testing]
 - [Edited]
 
+## 20/09/2021 [Koby]
+- [Added] Concrete implementation of `DataPipeine/mturk_data_pipeline.py`
+- [Added] utils functions in `DataPipeline/utils.py`
+
+## 19/09/2021 [Koby]
+- [Added] Concrete Implementation of `DataPipeline/mha_data_pipeline.py`
+
 ## 18/09/2021 [Koby]
 - [Added] Concrete Implementation of `DataPipelines/mha_dialog_pipeline.py`
 - [Added] Define new exceptions of `Exceptions/DataPipelineExceptions.py`

@@ -1,4 +1,4 @@
-from datadownloader import DataDownloader
+from DataDownloader.datadownloader import DataDownloader
 from Exceptions.DataDownloaderException import *
 from APIConfigs import secure
 import requests
@@ -49,13 +49,21 @@ class MHADataDownloader(DataDownloader):
                 print("unable to request endpoint: ", str(key))
                 raise RequestFailureException
             else:
-                if input_factors[key] == []:
-                    self.data[key] = pd.DataFrame.from_dict(objects.json())
+                self.data[key] = pd.DataFrame.from_dict(objects.json())
+                if input_factors[key]:
+                    self.data[key] = self.data[key][input_factors[key]]
         return self.data
 
-# if __name__ == "__main__":
-#     mhadatadownloader = MHADataDownloader()
-#     mhadatadownloader.download_data()
 
+if __name__ == "__main__":
+    mhadatadownloader = MHADataDownloader()
+    data = mhadatadownloader.download_data()
+    data_dialgoues = data["dialogues"][["user", "url", "bandit_sequence"]]
+    data_bot_messages = data["botmessages"][["bot_text", "time_stamp", "sent", "dialogue_id"]]
+    data_user_messages = data["usermessages"][["user_text", "time_stamp", "dialogue_id", "sent", "invalid", "dummy"]]
+    df = data_dialgoues.join(data_bot_messages.set_index("dialogue_id"), on="url")
+    #df.to_csv("../sample_files/mha_test_data.csv")
+    df = data_dialgoues.join(data_user_messages.set_index("dialogue_id"), on="url")
+    df.to_csv("../sample_files/mha_test_data.csv")
 
 
