@@ -76,6 +76,9 @@ class MturkDataPipeline:
                 version = version_l.loc[[v_id]][["text", "timestamp", "policy"]]
                 row_dict = {}
                 row_dict["version"] = version["text"][v_id]
+                arm_strs = row_dict["version"].lower().split(" ")
+                arm = arm_strs[arm_strs.index("arm"): arm_strs.index("arm")+2]
+                row_dict["arm"] = " ".join(arm)
                 row_dict["learner"] = learner
                 row_dict["assign_t"] = version["timestamp"][v_id]
                 row_dict["next_assign_t"] = get_learner_next_assign_t(version_l, version["timestamp"][v_id])
@@ -120,9 +123,9 @@ class MturkDataPipeline:
 
 
 if __name__ == "__main__":
-    mooclet_id = [19]
+    mooclet_id = [20]
     var_names = {
-        "reward": "mturk_ts_reward_round_2",
+        "reward": "mturk_ts_reward_round_3",
         "parameterpolicy": 6
     }
     mturk_datapipeline = MturkDataPipeline(mooclet_id)
