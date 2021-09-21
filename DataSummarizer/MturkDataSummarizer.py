@@ -1,5 +1,4 @@
-import pandas as pd
-from DataSummarizer.DataSummarizer import DataSummarizer
+from DataSummarizer import DataSummarizer
 import pandas as pd
 
 
@@ -10,7 +9,7 @@ class MTurkDataSummarizer(DataSummarizer):
 
     def construct_summarized_df(self, csv_file_path, groups):
         df = pd.read_csv(csv_file_path)
-        learner_count = df.groupby(by=groups[:-1])["learner"].shape[0]
+        learner_count = df.groupby(by=groups[:-1])["learner"].count()
         df = df.groupby(by=groups).agg({'reward': ['mean', 'min', 'max','std','sem'], 'learner' : ['count']})
         df[("learner", "probAssigned")] = df[("learner", "count")]/learner_count
         self.output_data = df

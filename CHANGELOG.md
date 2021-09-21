@@ -5,6 +5,10 @@
 - [Testing]
 - [Edited]
 
+## 21/09/2021 [Koby]
+- [Added] Concrete implementation of `DataSummarizer/MturkDataSummarizer.py`
+- [Added] Define contracts in `DataSummarizer/DataSummarizer.py`
+
 ## 20/09/2021 [Koby]
 - [Added] Concrete implementation of `DataPipeine/mturk_data_pipeline.py`
 - [Added] utils functions in `DataPipeline/utils.py`
