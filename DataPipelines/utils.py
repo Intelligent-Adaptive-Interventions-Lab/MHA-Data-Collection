@@ -20,8 +20,6 @@ def get_learner_next_assign_t(versions, a_t, mooclet_id=None,timestamp_key="time
     if mooclet_id:
         versions = versions[versions["mooclet"] == mooclet_id]
     assignment_times = sorted(versions[timestamp_key].unique().tolist())
-    print(a_t)
-    print(assignment_times)
     i = assignment_times.index(a_t)
     try:
         next = assignment_times[i+1]
@@ -44,3 +42,5 @@ def get_valid_parameter_set(parameterhistory, parameter, a_t):
 
 def get_policy_by_policy_id(policies, p_id):
     return policies[policies["id"] == p_id]["name"].values[0]
+
+

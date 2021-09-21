@@ -1,4 +1,5 @@
 from DataDownloader.moocletdatadownloader import MoocletDataDownloader
+from DataSummarizers.MturkDataSummarizer import MTurkDataSummarizer
 from Exceptions.DataPipelineException import *
 from DataPipelines.utils import get_valid_parameter_set, get_reward_in_timewindow, get_learner_next_assign_t, get_policy_by_policy_id
 import pandas as pd
@@ -10,12 +11,13 @@ pd.options.mode.chained_assignment = None
 
 class MturkDataPipeline:
 
-    def __init__(self, mooclet_ids):
+    def __init__(self, mooclet_ids, summarized:bool):
         self.configs = ""
         self.mooclet_data = None
         self.intermediate_data = {}
         self.output_data = None
         self.mooclet_ids = mooclet_ids
+        self.summarized = summarized
 
     def step_0_initialize_data_downloaders(self):
         self.mooclet_data = MoocletDataDownloader().download_data()
@@ -95,6 +97,12 @@ class MturkDataPipeline:
         combined_df = pd.DataFrame.from_records(rows)
         combined_df = combined_df.sort_values(by=["assign_t"])
         combined_df.reset_index(inplace=True, drop=True)
+        combined_df = pd.concat([combined_df.drop(['parameters'], axis=1), combined_df['parameters'].apply(pd.Series)], axis=1)
+        batch_groups = combined_df.groupby("variance_a").obj.set_index(
+            "variance_a")
+        batch_groups_list = list(batch_groups.index.unique())
+        combined_df["batch_group"] = combined_df["variance_a"].apply(
+            batch_groups_list.index)
         self.output_data = combined_df
 
     def step_3_add_timestamp_filters(self, start_time=None, end_time=None):
@@ -114,12 +122,28 @@ class MturkDataPipeline:
             workbook_name = f"../output_files/{name}.csv"
         self.output_data.to_csv(workbook_name)
 
+    def step_5_get_summarized_data(self, groups, name=None):
+        if not self.summarized:
+            return
+        else:
+            now = datetime.datetime.now()
+            if not os.path.isdir("../output_files/"):
+                os.mkdir("../output_files/")
+            if not name:
+                workbook_name = f"../output_files/mturk_datapipeline_summarized_{now}.csv"
+            else:
+                workbook_name = f"../output_files/{name}.csv"
+            mturk_summarizer = MTurkDataSummarizer()
+            mturk_summarizer.construct_summarized_df(groups=groups, dataframe=self.output_data)
+            mturk_summarizer.save_data(workbook_name)
+
     def __call__(self, var_names):
         self.step_0_initialize_data_downloaders()
         self.step_1_obtain_processed_data(var_names)
         self.step_2_combine_data()
         self.step_3_add_timestamp_filters()
         self.step_4_save_output_data()
+        self.step_5_get_summarized_data(groups=["policy", "arm"])
 
 
 if __name__ == "__main__":
@@ -128,7 +152,7 @@ if __name__ == "__main__":
         "reward": "mturk_ts_reward_round_3",
         "parameterpolicy": 6
     }
-    mturk_datapipeline = MturkDataPipeline(mooclet_id)
+    mturk_datapipeline = MturkDataPipeline(mooclet_id, True)
     mturk_datapipeline(var_names)
 
 

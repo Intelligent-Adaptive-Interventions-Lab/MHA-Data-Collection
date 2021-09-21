@@ -1,4 +1,4 @@
-from DataSummarizer import DataSummarizer
+from DataSummarizers.DataSummarizer import DataSummarizer
 import pandas as pd
 
 
@@ -7,8 +7,13 @@ class MTurkDataSummarizer(DataSummarizer):
     def __init__(self):
         self.output_data = None
 
-    def construct_summarized_df(self, csv_file_path, groups):
-        df = pd.read_csv(csv_file_path)
+    def construct_summarized_df(self, groups, csv_file_path=None, dataframe=None):
+        if csv_file_path:
+            df = pd.read_csv(csv_file_path)
+        else:
+            df = dataframe
+        if df is None:
+            return
         learner_count = df.groupby(by=groups[:-1])["learner"].count()
         df = df.groupby(by=groups).agg({'reward': ['mean', 'min', 'max','std','sem'], 'learner' : ['count']})
         df[("learner", "probAssigned")] = df[("learner", "count")]/learner_count
@@ -18,7 +23,7 @@ class MTurkDataSummarizer(DataSummarizer):
     def save_data(self, path):
         if not path:
             path = "../output_files/mturk_data_summarised.csv"
-        df.to_csv(path)
+        self.output_data.to_csv(path)
 
 
 if __name__ == "__main__":

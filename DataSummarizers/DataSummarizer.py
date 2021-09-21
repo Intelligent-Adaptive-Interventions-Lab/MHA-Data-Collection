@@ -4,7 +4,7 @@ from typing import List, Optional
 
 class DataSummarizer(ABC):
     @abstractmethod
-    def construct_summarized_df(self, csv_path: str, groups: List[str]):
+    def construct_summarized_df(self, csv_path: str, groups: List[str], dataframe=None):
         raise NotImplementedError
 
     @abstractmethod
