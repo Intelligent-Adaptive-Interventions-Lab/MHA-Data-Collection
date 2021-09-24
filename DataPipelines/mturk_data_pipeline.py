@@ -175,7 +175,10 @@ class MturkDataPipeline:
         df["coef_cov_updated"] = df["coef_cov_updated"].replace(0, np.NaN)
         df["coef_mean_updated"] = df["coef_mean_updated"].replace(0, np.NaN)
         df = df.set_index("index")
-        self.output_data = df.drop(columns=["coef_draw", "precesion_draw"])
+        if "coef_draw" in list(df.columns) and "precesion_draw" in list(df.columns):
+            self.output_data = df.drop(columns=["coef_draw", "precesion_draw"])
+        else:
+            self.output_data = df
 
     def step_4_add_timestamp_filters(self, start_time=None, end_time=None):
         if start_time:
