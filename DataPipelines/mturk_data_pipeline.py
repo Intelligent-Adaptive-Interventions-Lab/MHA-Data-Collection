@@ -117,6 +117,8 @@ class MturkDataPipeline:
         combined_df["batch_group"] = combined_df["variance_a"].apply(
             batch_groups_list.index)
         self.output_data = combined_df
+        self.output_data = combined_df.drop_duplicates(subset=["learner_id", "assign_t"])
+        print(self.output_data.shape)
 
     def step_3_add_updated_parameters(self):
         parametershistory = self.intermediate_data["parameterhistory"]
@@ -150,14 +152,9 @@ class MturkDataPipeline:
                     row["update_batch_group"] = group_count
                     row["index"] = r_i
                     rows.append(row)
-                else:
-                    row["parameters_update"] = "NA"
-                    row["update_batch_group"] = "NA"
-                    row["index"] = r_i
-                    rows.append(row)
             group_count += 1
         new_df = pd.DataFrame(rows)
-        df = df.merge(new_df, on="index", how="inner")
+        df = df.set_index("index").join(new_df.set_index("index"))
         df = pd.concat([df.drop(['parameters_update'], axis=1),
                                  df['parameters_update'].apply(pd.Series)],
                                 axis=1)
