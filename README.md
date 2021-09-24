@@ -1,5 +1,7 @@
 # MHA-Data-Collection
 This is eventually going to be a web application that collects the data from the two database automatically from the Mooclet Database and the MHA Django Controller Database.
+Design Document is linked as below:
+https://docs.google.com/document/d/1hwQz31dcL0bI9a9PXromlezHM0pNIT4pkgCTcUZ321M/edit?usp=sharing
 
 ## Phase 1 
 Phase 1 will be a python script that collects all the data and combine them such that they follow a format as defined in [this imagined dataset](http://tiny.cc/mhaimagineddata). 
