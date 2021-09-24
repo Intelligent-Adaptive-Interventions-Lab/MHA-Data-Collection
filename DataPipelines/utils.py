@@ -1,6 +1,7 @@
 import datetime
 import numpy as np
-
+import requests
+from APIConfigs.secure import *
 
 def get_reward_in_timewindow(rewards, start_time, end_time):
     rewards = rewards.sort_values(by=["timestamp"])
@@ -40,7 +41,16 @@ def get_valid_parameter_set(parameterhistory, parameter, a_t):
         return parameter["parameters"].values[0]
 
 
+def get_valid_draws_set(draws, a_t, timestamp="timestamp"):
+    return draws[draws[timestamp] < a_t].tail(1)
+
+
 def get_policy_by_policy_id(policies, p_id):
     return policies[policies["id"] == p_id]["name"].values[0]
 
+
+def get_learner_name_by_id(learners, learner_id):
+    url = f"https://mooclet.canadacentral.cloudapp.azure.com/engine/api/v1/learner/{learner_id}"
+    objects = requests.get(url, headers={'Authorization': f'Token {MOOCLET_API_TOKEN}'})
+    return objects.json()["name"]
 

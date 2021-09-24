@@ -36,9 +36,6 @@ class MturkDataPipeline:
         # get arms
         versions = values[values["variable"] == "version"]
         rewards = values[values["variable"] == var_names["reward"]]
-        # rewards = {}
-        # for r in var_names["reward"]:
-        #     rewards[r] = values[values["variable"] == r]
         parameters = self.mooclet_data["policyparameters"]
         parametershistory = self.mooclet_data["policyparametershistory"]
         parameters = parameters[parameters["mooclet"].isin(self.mooclet_ids)]
@@ -49,8 +46,9 @@ class MturkDataPipeline:
         parametershistory = parametershistory.sort_values(by=["mooclet", "creation_time"])
         policies = self.mooclet_data["policy"]
         learners = sorted(values["learner"].unique())
-        learners_ = self.mooclet_data["learner"]
-        learners = learners_[learners_["name"].isin(learners)][["id", "name"]]
+        draws = {}
+        for _draw in ["precesion_draw", "coef_draw"]:
+                draws[_draw] = values[values["variable"] == _draw]
         self.intermediate_data = {
             "mooclets": mooclets,
             "versions": versions,
@@ -58,7 +56,8 @@ class MturkDataPipeline:
             "parameters": parameters,
             "parameterhistory": parametershistory,
             "learners": learners,
-            "policies": policies
+            "policies": policies,
+            "draws": draws,
         }
 
     def step_2_combine_data(self):
@@ -72,14 +71,13 @@ class MturkDataPipeline:
         versions = self.intermediate_data["versions"]
         versions = versions.sort_values(by=["learner", "timestamp"])
         parameters = self.intermediate_data["parameters"]
+        all_draws = self.intermediate_data["draws"]
+        prec_draws = all_draws["precesion_draw"]
+        coef_draws = all_draws["coef_draw"]
         parametershistory = self.intermediate_data["parameterhistory"]
         parametershistory = parametershistory.sort_values(by=["creation_time"])
         rows = []
-        learners = self.intermediate_data["learners"]
-        for l_id in learners.index:
-            _learner = learners.loc[[l_id]][["id", "name"]]
-            learner = _learner["name"].values[0]
-            id_learner =_learner["id"].values[0]
+        for learner in self.intermediate_data["learners"]:
             version_l = versions[versions["learner"] == learner]
             rewards_l = rewards[rewards["learner"] == learner]
             for v_id in version_l.index:
@@ -89,7 +87,6 @@ class MturkDataPipeline:
                 arm_strs = row_dict["version"].lower().split(" ")
                 arm = arm_strs[arm_strs.index("arm"): arm_strs.index("arm")+2]
                 row_dict["arm"] = " ".join(arm)
-                row_dict["learner_id"] = id_learner
                 row_dict["learner"] = learner
                 row_dict["assign_t"] = version["timestamp"][v_id]
                 row_dict["next_assign_t"] = get_learner_next_assign_t(version_l, version["timestamp"][v_id])
@@ -102,11 +99,20 @@ class MturkDataPipeline:
                     row_dict["reward_time"] = np.NaN
                 row_dict["parameters"] = get_valid_parameter_set(parametershistory, parameters, row_dict["assign_t"])
                 row_dict["policy"] = get_policy_by_policy_id(self.intermediate_data["policies"], version["policy"][v_id])
+                prec_draw = get_valid_draws_set(prec_draws, row_dict["assign_t"])
+                coef_draw = get_valid_draws_set(coef_draws, row_dict["assign_t"])
+                if prec_draw.size > 0 and coef_draw.size > 0:
+                    prev_draw = prec_draw["text"].values[0]
+                    coef_draw = coef_draw["text"].values[0]
+                    row_dict["precision_draw_data"] = np.fromstring(prev_draw[1:-1], sep=" ")
+                    row_dict["coef_draw_data"] = np.fromstring(coef_draw[1:-1], sep=" ")
                 rows.append(row_dict)
         combined_df = pd.DataFrame.from_records(rows)
         arm_early_no = sorted(list(combined_df["arm"].unique()))[0]
-        combined_df[f"is_arm{arm_early_no.split(' ')[-1]}"] = (combined_df["arm"] == arm_early_no)
-        combined_df[f"is_arm{arm_early_no.split(' ')[-1]}"] = combined_df[f"is_arm{arm_early_no.split(' ')[-1]}"].astype(int)
+        combined_df[f"is_arm{arm_early_no.split(' ')[-1]}"] = (
+                    combined_df["arm"] == arm_early_no)
+        combined_df[f"is_arm{arm_early_no.split(' ')[-1]}"] = combined_df[
+            f"is_arm{arm_early_no.split(' ')[-1]}"].astype(int)
         self.intermediate_data["version_json"] = f"is_arm{arm_early_no.split(' ')[-1]}"
         combined_df = combined_df.sort_values(by=["assign_t"])
         combined_df.reset_index(inplace=True, drop=True)
@@ -117,51 +123,59 @@ class MturkDataPipeline:
         combined_df["batch_group"] = combined_df["variance_a"].apply(
             batch_groups_list.index)
         self.output_data = combined_df
-        self.output_data = combined_df.drop_duplicates(subset=["learner_id", "assign_t"])
 
-    def step_3_add_updated_parameters(self, var_names):
-        parametershistory = self.intermediate_data["parameterhistory"]
+    def step_3_add_parameters_updates(self, var_names):
         df = self.output_data
-        df = df.reset_index()
-        group_count = 0
-        list_rids_assigned = {}
-        rows = []
-        for p_h in parametershistory.index:
-            history = parametershistory.loc[[p_h]][["parameters"]]
-            update_record = history["parameters"][p_h]["update_record"]
-            for dict_ in update_record:
+        df["index"] = df.index
+        df["coef_mean_updated"] = repr(0)
+        df["coef_cov_updated"] = repr(0)
+        df["variance_a_updated"] = np.NaN
+        df["variance_b_updated"] = np.NaN
+        df["update_size_updated"] = np.NaN
+        df["batch_group_updated"] = np.NaN
+        learners = self.mooclet_data["learner"]
+        obs_record = {}
+        for i in df["batch_group"].unique():
+            obs = df[df["batch_group"] == i]
+            obs = obs.head(1)
+            mean = obs["coef_mean"].values[0]
+            cov = obs["coef_cov"].values[0]
+            var_a = obs["variance_a"].values[0]
+            var_b = obs["variance_b"].values[0]
+            obs_record[var_a] = len(obs_record)
+            if "update_size" not in obs:
+                update_size = np.NaN
+            else:
+                update_size = obs["update_size"].values[0]
+            if "update_record" not in obs:
+                continue
+            for dict in obs["update_record"].values[0]:
                 round_no = var_names["reward"].split("_")[-1]
-                arm_text = self.intermediate_data["version_json"] + f"_round_{round_no}"
-                record = df[df["learner_id"] == dict_["user_id"]]
-                if dict_["user_id"] not in list_rids_assigned:
-                    list_rids_assigned[dict_["user_id"]] = []
-                record = record[record[self.intermediate_data["version_json"]] == dict_[arm_text]]
-                record = record[record["reward"] == dict_[var_names["reward"]]]
+                arm_text = self.intermediate_data[
+                               "version_json"] + f"_round_{round_no}"
+                # df  -> df_learner -> df_learner_arm_value -> df_reward_value
+                record = df[df["batch_group"] == i]
+                record = record[record["learner"] == get_learner_name_by_id(learners, int(dict["user_id"]))]
+                record = record[
+                    record[self.intermediate_data["version_json"]] == dict[
+                        arm_text]]
+                record = record[record["reward"] == dict[var_names["reward"]]]
                 if record.shape[0] > 1:
                     record = record.head(1)
-                    if record["index"].values[0] in list(list_rids_assigned.values()):
-                        record = record.head(len(list_rids_assigned[dict_["user_id"]])+ 1).tail(1)
-                if not record.empty:
-                    parameters = history["parameters"][p_h]
-                    parameters = dict(("{}_updated".format(k), v) for k, v in
-                                      parameters.items())
-                    r_i = record["index"].values[0]
-                    list_rids_assigned[dict_["user_id"]].append(r_i)
-                    row = {}
-                    row["parameters_update"] = parameters
-                    row["update_batch_group"] = group_count
-                    row["index"] = r_i
-                    rows.append(row)
-            group_count += 1
-        print(list_rids_assigned)
-        new_df = pd.DataFrame(rows)
-        print(new_df.shape)
-        df = df.set_index("index").join(new_df.set_index("index"))
-        df = pd.concat([df.drop(['parameters_update'], axis=1),
-                                 df['parameters_update'].apply(pd.Series)],
-                                axis=1)
-        df = df.replace("NA", np.NaN)
-        self.output_data = df.drop_duplicates(subset=["learner_id", "assign_t"])
+                if record.size > 0:
+                    r_id = record["index"].values[0]
+                    df.loc[r_id, "coef_mean_updated"] = repr(mean)
+                    df.loc[r_id, "coef_cov_updated"] = repr(cov)
+                    df.loc[r_id, "variance_a_updated"] = float(var_a)
+                    df.loc[r_id, "variance_b_updated"] = float(var_b)
+                    df.loc[r_id, "batch_group_updated"] = obs_record[var_a]
+                    df.loc[r_id, "update_size_updated"] = update_size
+        df["coef_mean_updated"] = df["coef_mean_updated"].apply(eval)
+        df["coef_cov_updated"] = df["coef_cov_updated"].apply(eval)
+        df["coef_cov_updated"] = df["coef_cov_updated"].replace(0, np.NaN)
+        df["coef_mean_updated"] = df["coef_mean_updated"].replace(0, np.NaN)
+        df = df.set_index("index")
+        self.output_data = df.drop(columns=["coef_draw", "precesion_draw"])
 
     def step_4_add_timestamp_filters(self, start_time=None, end_time=None):
         if start_time:
@@ -199,16 +213,16 @@ class MturkDataPipeline:
         self.step_0_initialize_data_downloaders()
         self.step_1_obtain_processed_data(var_names)
         self.step_2_combine_data()
-        self.step_3_add_updated_parameters(var_names)
+        self.step_3_add_parameters_updates(var_names)
         self.step_4_add_timestamp_filters()
         self.step_5_save_output_data()
         self.step_6_get_summarized_data(groups=["policy", "arm"])
 
 
 if __name__ == "__main__":
-    mooclet_id = [56]
+    mooclet_id = [57]
     var_names = {
-        "reward": "mturk_ts_reward_round_28",
+        "reward": "mturk_ts_reward_round_29",
         "parameterpolicy": 6
     }
     mturk_datapipeline = MturkDataPipeline(mooclet_id, True)
