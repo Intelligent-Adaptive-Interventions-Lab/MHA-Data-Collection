@@ -118,9 +118,8 @@ class MturkDataPipeline:
             batch_groups_list.index)
         self.output_data = combined_df
         self.output_data = combined_df.drop_duplicates(subset=["learner_id", "assign_t"])
-        print(self.output_data.shape)
 
-    def step_3_add_updated_parameters(self):
+    def step_3_add_updated_parameters(self, var_names):
         parametershistory = self.intermediate_data["parameterhistory"]
         df = self.output_data
         df = df.reset_index()
@@ -131,29 +130,32 @@ class MturkDataPipeline:
             history = parametershistory.loc[[p_h]][["parameters"]]
             update_record = history["parameters"][p_h]["update_record"]
             for dict_ in update_record:
-                keys = list(dict_.keys())
-                record = df[df["learner_id"] == dict_[keys[0]]]
-                if dict_[keys[0]] not in list_rids_assigned:
-                    list_rids_assigned[dict_[keys[0]]] = []
-                record = record[record[self.intermediate_data["version_json"]] == dict_[keys[1]]]
-                record = record[record["reward"] == dict_[keys[2]]]
+                round_no = var_names["reward"].split("_")[-1]
+                arm_text = self.intermediate_data["version_json"] + f"_round_{round_no}"
+                record = df[df["learner_id"] == dict_["user_id"]]
+                if dict_["user_id"] not in list_rids_assigned:
+                    list_rids_assigned[dict_["user_id"]] = []
+                record = record[record[self.intermediate_data["version_json"]] == dict_[arm_text]]
+                record = record[record["reward"] == dict_[var_names["reward"]]]
                 if record.shape[0] > 1:
                     record = record.head(1)
-                    if df.index.get_loc(record.iloc[0].name) in list_rids_assigned[dict_[keys[0]]]:
-                        record = record.head(len(list_rids_assigned[dict_[keys[0]]])+ 1).tail(1)
+                    if record["index"].values[0] in list(list_rids_assigned.values()):
+                        record = record.head(len(list_rids_assigned[dict_["user_id"]])+ 1).tail(1)
                 if not record.empty:
                     parameters = history["parameters"][p_h]
                     parameters = dict(("{}_updated".format(k), v) for k, v in
                                       parameters.items())
                     r_i = record["index"].values[0]
-                    list_rids_assigned[dict_[keys[0]]].append(r_i)
+                    list_rids_assigned[dict_["user_id"]].append(r_i)
                     row = {}
                     row["parameters_update"] = parameters
                     row["update_batch_group"] = group_count
                     row["index"] = r_i
                     rows.append(row)
             group_count += 1
+        print(list_rids_assigned)
         new_df = pd.DataFrame(rows)
+        print(new_df.shape)
         df = df.set_index("index").join(new_df.set_index("index"))
         df = pd.concat([df.drop(['parameters_update'], axis=1),
                                  df['parameters_update'].apply(pd.Series)],
@@ -197,16 +199,16 @@ class MturkDataPipeline:
         self.step_0_initialize_data_downloaders()
         self.step_1_obtain_processed_data(var_names)
         self.step_2_combine_data()
-        self.step_3_add_updated_parameters()
+        self.step_3_add_updated_parameters(var_names)
         self.step_4_add_timestamp_filters()
         self.step_5_save_output_data()
         self.step_6_get_summarized_data(groups=["policy", "arm"])
 
 
 if __name__ == "__main__":
-    mooclet_id = [52]
+    mooclet_id = [56]
     var_names = {
-        "reward": "mturk_ts_reward_round_24",
+        "reward": "mturk_ts_reward_round_28",
         "parameterpolicy": 6
     }
     mturk_datapipeline = MturkDataPipeline(mooclet_id, True)
