@@ -14,6 +14,8 @@ class MTurkDataSummarizer(DataSummarizer):
             df = dataframe
         if df is None:
             return
+        if "batch_group_updated" in df.columns:
+            df = df[df["batch_group_updated"].notna()]
         learner_count = df.groupby(by=groups[:-1])["learner"].count()
         df = df.groupby(by=groups).agg({'reward': ['mean', 'min', 'max','std','sem'], 'learner' : ['count']})
         df[("learner", "probAssigned")] = df[("learner", "count")]/learner_count

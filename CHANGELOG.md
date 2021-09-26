@@ -5,6 +5,12 @@
 - [Testing]
 - [Edited]
 
+## 25/09/2021 [Jiakai]
+- [Added] Modification in `DataSummarizer/MturkDataSummarizer.py`:
+            Due to there is a difference in assignment batch size and update batch size,
+            Summarizer will drop rows with NAs in batch_group_updated, which means that
+            it will compute the summary with observarions in the update batch.
+
 ## 21/09/2021 [Koby]
 - [Added] Concrete implementation of `DataSummarizer/MturkDataSummarizer.py`
 - [Added] Define contracts in `DataSummarizer/DataSummarizer.py`
