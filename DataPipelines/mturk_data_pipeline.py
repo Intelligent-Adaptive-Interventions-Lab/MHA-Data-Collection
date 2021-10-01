@@ -74,6 +74,7 @@ class MturkDataPipeline:
         all_draws = self.intermediate_data["draws"]
         prec_draws = all_draws["precesion_draw"]
         coef_draws = all_draws["coef_draw"]
+        print(prec_draws.columns)
         parametershistory = self.intermediate_data["parameterhistory"]
         parametershistory = parametershistory.sort_values(by=["creation_time"])
         rows = []
@@ -99,6 +100,8 @@ class MturkDataPipeline:
                     row_dict["reward_time"] = np.NaN
                 row_dict["parameters"] = get_valid_parameter_set(parametershistory, parameters, row_dict["assign_t"])
                 row_dict["policy"] = get_policy_by_policy_id(self.intermediate_data["policies"], version["policy"][v_id])
+                prec_draws = prec_draws[prec_draws["learner"] == learner]
+                coef_draws = coef_draws[coef_draws["learner"] == learner]
                 prec_draw = get_valid_draws_set(prec_draws, row_dict["assign_t"])
                 coef_draw = get_valid_draws_set(coef_draws, row_dict["assign_t"])
                 if prec_draw.size > 0 and coef_draw.size > 0:
