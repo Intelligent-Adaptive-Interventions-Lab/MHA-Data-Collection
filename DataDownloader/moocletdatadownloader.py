@@ -63,6 +63,36 @@ class MoocletDataDownloader(DataDownloader):
                     self.data[key] = self.data[key][input_factors[key]]
         return self.data
 
+    def get_objects_by_mooclet_ids(self, object, mooclet_ids):
+        dfs = []
+        base_url = self.configs["baseURL"] + f"{object}?mooclet="
+        for m_id in mooclet_ids:
+            url = base_url + str(m_id)
+            objects = requests.get(url,  headers={'Authorization': f'Token {self.token}'})
+            count = objects.json()["count"]
+            rows = 0
+            page = 1
+            list_dfs = []
+            while rows < count:
+                objects = requests.get(url+f"&page={page}", headers={'Authorization': f'Token {self.token}'})
+                #print(objects.json())
+                data = objects.json()["results"]
+                list_dfs.append(pd.DataFrame.from_records(data))
+                page += 1
+                rows += len(data)
+            try:
+                dfs.append(pd.concat(list_dfs))
+            except:
+                print("no parameter history found")
+        if len(dfs) > 0:
+            return pd.concat(dfs)
+        return pd.DataFrame()
+
+    def get_policies(self):
+        objects = requests.get(self.configs["baseURL"] + "policy", headers={'Authorization': f'Token {self.token}'})
+        return pd.DataFrame.from_records(objects.json()["results"])
+
+
 
 if __name__ == "__main__":
     moocletDataDownloader = MoocletDataDownloader()

@@ -78,8 +78,9 @@ class MHADialogPipeline:
         for user in self.users:
             df_user = self.output_data[user]
             user_id = user.split("/")[-2]
-            df_user["time_stamp"] = df_user['time_stamp'].dt.tz_localize(None)
-            df_user.to_excel(writer, sheet_name=f"User_{user_id}")
+            if user_id in ["146", "135"]:
+                df_user["time_stamp"] = df_user['time_stamp'].dt.tz_localize(None)
+                df_user.to_excel(writer, sheet_name=f"User_{user_id}")
         writer.save()
 
     def __call__(self):
