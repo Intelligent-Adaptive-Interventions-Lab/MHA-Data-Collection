@@ -46,10 +46,10 @@ class MHADataPipeline:
             "policyparameters": MoocletDataDownloader().get_objects_by_mooclet_ids("policyparameters", self.mooclet_ids),
             "version-name": MoocletDataDownloader().get_objects_by_mooclet_ids("version-name", self.mooclet_ids)
         }
-        self.mha_data = MHADataDownloader().download_data()
+        # self.mha_data = MHADataDownloader().download_data()
 
     def step_1_obtain_processed_data(self, var_names):
-        if not self.mooclet_data or not self.mha_data:
+        if not self.mooclet_data:
             raise EmptyDataFrameException
             return
         base_values = self.mooclet_data["value"]
@@ -57,6 +57,7 @@ class MHADataPipeline:
         for m_id in self.mooclet_ids:
             values = base_values[base_values["mooclet"] == m_id]
             versions = values[values["variable"] == "version"]
+            versions = versions.sort_values(by=["timestamp"])
             versions = versions.reset_index()
             contextual = {}
             for c in var_names["contextuals"]:
@@ -70,7 +71,8 @@ class MHADataPipeline:
             parameters = self.mooclet_data["policyparameters"]
             parameters_history = self.mooclet_data["policyparametershistory"]
             parameters = parameters.loc[parameters["mooclet"] == m_id]
-            parameters_history = parameters_history.loc[parameters_history["mooclet"] == m_id]
+            if not parameters_history.empty:
+                parameters_history = parameters_history.loc[parameters_history["mooclet"] == m_id]
             versions_names = self.mooclet_data["version-name"]
             versions_names = versions_names.loc[versions_names["mooclet"] == m_id]
             intermediate_data = {
@@ -88,6 +90,9 @@ class MHADataPipeline:
                     data[g] = values[values["variable"] == g]
             intermediate_data["groups"] = data
             self.intermediate_data[m_id] = intermediate_data
+            print(rewards.shape)
+            print(versions.shape)
+            print('END STEP 1')
 
     def step_2_combine_data(self):
         output_data = {}
@@ -96,31 +101,31 @@ class MHADataPipeline:
             rows = []
             rewards = self.intermediate_data.get(m_id).get("rewards")
             contextual = self.intermediate_data.get(m_id).get("contextual")
-            #print(f"contextual:{contextual}")
             policies = self.intermediate_data.get(m_id).get("policies")
             parameters = self.intermediate_data.get(m_id).get("parameters")
             parameters_history = self.intermediate_data.get(m_id).get("parameters_history")
             versions = self.intermediate_data.get(m_id).get("versions")
             versions_name = self.intermediate_data.get(m_id).get("versions_name")
-            versions = versions.sort_values(by=["timestamp"])
             for v_id, row_data in versions.iterrows():
                 row_dict = collections.OrderedDict()
-                version = versions.loc[[v_id]][["learner", "timestamp", "policy", "version"]]
+                version = versions.iloc[[v_id]]
                 if version is None or version["learner"][v_id] is None:
+                    print(v_id, row_data)
+                    print("This version is none")
                     continue
-                #print(F"VERSION{version}")
                 row_dict["study"] = f"Study {count}"
                 row_dict["learner"] = version["learner"][v_id]
                 row_dict["timestamp"] = version["timestamp"][v_id]
-                #print(f"Policy ID: {version['policy'][v_id]}")
                 row_dict["policy"] = get_policy_by_policy_id(policies, version["policy"][v_id])
                 row_dict["arm"] = get_version_by_version_id(versions_name, version["version"][v_id])
                 row_dict["contextual"] = get_valid_contextual_values(contextual, row_dict["timestamp"])
-                #print(versions[versions["learner"] == row_dict["learner"]])
                 next_version_timestamp = get_learner_next_assign_t(versions[versions["learner"] == row_dict["learner"]], row_dict["timestamp"])
                 row_dict["next_assign_t"] = next_version_timestamp
                 row_dict["reward_name"],row_dict["reward"], row_dict["user respond time"] = None, None, None
                 reward = get_reward_in_timewindow(rewards[rewards["learner"] == row_dict["learner"]], row_dict["timestamp"], next_version_timestamp)
+                row_dict["reward_name"] = None
+                row_dict["reward"] = None
+                row_dict["user respond time"] = None
                 if reward is not None:
                     row_dict["reward_name"] = reward["variable"].values[0]
                     row_dict["reward"] = reward["value"].values[0]
@@ -128,9 +133,6 @@ class MHADataPipeline:
                 row_dict["parameters"] = get_valid_parameter_set(
                     parameters_history, parameters, row_dict["timestamp"])
                 row_dict["group"] = None
-                # if row_dict["policy"] != "uniform_random":
-                #     if "groups" in self.intermediate_data[m_id]:
-                #         row_dict["group"] = get_valid_groups(self.intermediate_data.get(m_id).get("groups"), pd.Timestamp(row_dict["timestamp"]), version["version"][v_id], row_dict["learner"])
                 rows.append(row_dict)
             combined_df = pd.DataFrame.from_records(rows)
             combined_df = combined_df.sort_values(by=["timestamp"])
@@ -154,6 +156,7 @@ class MHADataPipeline:
         big_df = big_df.sort_values(by=["timestamp"])
         big_df.reset_index(inplace=True, drop=True)
         self.output_data = big_df
+        print(self.output_data.shape)
 
     def step_3_add_time_filters(self, timeconstraints):
         if timeconstraints:
@@ -174,6 +177,7 @@ class MHADataPipeline:
         else:
             workbook_name = f"../output_files/{name}.csv"
         self.output_data.to_csv(workbook_name)
+        print(f"FINAL OUT0PUT SHAPE:{self.output_data.shape}")
 
     def __call__(self, var_names, time_constraints=None):
         self.step_0_initialize_data_downloaders()
@@ -184,12 +188,20 @@ class MHADataPipeline:
 
 
 if __name__ == "__main__":
+    # var_names = {
+    #     "rewards": ["mha_link_reward_wave_3", "mha_rationale_reward_wave_3", "mha_interaction_reward_wave_3"],
+    #     "contextuals": ["activelast48_wave_3", "weekdayorweekend_wave_3"],
+    #     "group_var": ["UR_or_TS", "UR_or_TSCONTEXTUAL"]
+    # }
+    # mooclet_ids = [89,90 ,92 ]
+    # mha_data_pipeline = MHADataPipeline(mooclet_ids)
+    # mha_data_pipeline(var_names)
     var_names = {
-        "rewards": ["mha_link_reward_wave_3", "mha_rationale_reward_wave_3", "mha_interaction_reward_wave_3"],
-        "contextuals": ["activelast48_wave_3", "weekdayorweekend_wave_3"],
-        "group_var": ["UR_or_TS", "UR_or_TSCONTEXTUAL"]
+        "rewards": ["vaccine_rating_eur_ver2"],
+        "contextuals": [],
+        "group_var": ["UR_or_TS"]
     }
-    mooclet_ids = [89,90 ,92 ]
+    mooclet_ids = [163]
     mha_data_pipeline = MHADataPipeline(mooclet_ids)
     mha_data_pipeline(var_names)
 
