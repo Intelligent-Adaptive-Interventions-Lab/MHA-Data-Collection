@@ -228,10 +228,10 @@ class MturkDataPipeline:
 
 
 if __name__ == "__main__":
-    mooclet_id = [61]
+    mooclet_id = [52]
     var_names = {
-        "reward": "f21_w5_prepare_growth",
-        "parameterpolicy": 17
+        "reward": "mturk_ts_reward_round_24",
+        "parameterpolicy": 6
     }
     mturk_datapipeline = MturkDataPipeline(mooclet_id, True)
     mturk_datapipeline(var_names)
