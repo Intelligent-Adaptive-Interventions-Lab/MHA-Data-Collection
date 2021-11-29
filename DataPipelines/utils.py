@@ -45,6 +45,8 @@ def build_var_names_dict():
 
 
 def get_valid_parameter_set(parameterhistory, parameter, a_t):
+    if parameterhistory.empty:
+        return parameter.values[0]
     parameterhistory = parameterhistory[parameterhistory["creation_time"] > a_t]
     if parameterhistory.shape[0] >= 1:
         return parameterhistory.head(1)["parameters"].values[0]

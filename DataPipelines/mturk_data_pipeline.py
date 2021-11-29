@@ -85,9 +85,9 @@ class MturkDataPipeline:
                 version_id = version["version"][v_id]
                 row_dict = {}
                 row_dict["version"] = version["text"][v_id]
-                arm_strs = row_dict["version"].lower().split(" ")
-                arm = arm_strs[arm_strs.index("arm"): arm_strs.index("arm")+2]
-                row_dict["arm"] = " ".join(arm)
+                # arm_strs = row_dict["version"].lower().split(" ")
+                # arm = arm_strs[arm_strs.index("arm"): arm_strs.index("arm")+2]
+                # row_dict["arm"] = " ".join(arm)
                 row_dict["learner"] = learner
                 row_dict["assign_t"] = version["timestamp"][v_id]
                 row_dict["next_assign_t"] = get_learner_next_assign_t(version_l, version["timestamp"][v_id])
@@ -113,12 +113,12 @@ class MturkDataPipeline:
                     row_dict["coef_draw_data"] = np.fromstring(coef_draw[1:-1], sep=" ")
                 rows.append(row_dict)
         combined_df = pd.DataFrame.from_records(rows)
-        arm_early_no = sorted(list(combined_df["arm"].unique()))[0]
-        combined_df[f"is_arm{arm_early_no.split(' ')[-1]}"] = (
-                    combined_df["arm"] == arm_early_no)
-        combined_df[f"is_arm{arm_early_no.split(' ')[-1]}"] = combined_df[
-            f"is_arm{arm_early_no.split(' ')[-1]}"].astype(int)
-        self.intermediate_data["version_json"] = f"is_arm{arm_early_no.split(' ')[-1]}"
+        # arm_early_no = sorted(list(combined_df["arm"].unique()))[0]
+        # combined_df[f"is_arm{arm_early_no.split(' ')[-1]}"] = (
+        #             combined_df["arm"] == arm_early_no)
+        # combined_df[f"is_arm{arm_early_no.split(' ')[-1]}"] = combined_df[
+        #     f"is_arm{arm_early_no.split(' ')[-1]}"].astype(int)
+        # self.intermediate_data["version_json"] = f"is_arm{arm_early_no.split(' ')[-1]}"
         combined_df = combined_df.sort_values(by=["assign_t"])
         combined_df.reset_index(inplace=True, drop=True)
         combined_df = pd.concat([combined_df.drop(['parameters'], axis=1), combined_df['parameters'].apply(pd.Series)], axis=1)
@@ -161,9 +161,9 @@ class MturkDataPipeline:
                 # df  -> df_learner -> df_learner_arm_value -> df_reward_value
                 record = df[df["batch_group"] == i]
                 record = record[record["learner"] == get_learner_name_by_id(learners, int(dict["user_id"]))]
-                record = record[
-                    record[self.intermediate_data["version_json"]] == dict[
-                        arm_text]]
+                # record = record[
+                #     record[self.intermediate_data["version_json"]] == dict[
+                #         arm_text]]
                 record = record[record["reward"] == dict[var_names["reward"]]]
                 if record.shape[0] > 1:
                     record = record.head(1)
@@ -228,10 +228,10 @@ class MturkDataPipeline:
 
 
 if __name__ == "__main__":
-    mooclet_id = [57]
+    mooclet_id = [61]
     var_names = {
-        "reward": "mturk_ts_reward_round_29",
-        "parameterpolicy": 6
+        "reward": "f21_w5_prepare_growth",
+        "parameterpolicy": 17
     }
     mturk_datapipeline = MturkDataPipeline(mooclet_id, True)
     mturk_datapipeline(var_names)
