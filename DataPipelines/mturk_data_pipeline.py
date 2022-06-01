@@ -21,14 +21,20 @@ class MturkDataPipeline:
         self.summarized = summarized
 
     def step_0_initialize_data_downloaders(self):
-        self.mooclet_data = MoocletDataDownloader().download_data()
+        self.mooclet_data = {
+            "value": MoocletDataDownloader().get_objects_by_mooclet_ids("value", self.mooclet_ids),
+            "policy": MoocletDataDownloader().get_policies(),
+            "policyparametershistory": MoocletDataDownloader().get_objects_by_mooclet_ids("policyparametershistory", self.mooclet_ids),
+            "policyparameters": MoocletDataDownloader().get_objects_by_mooclet_ids("policyparameters", self.mooclet_ids),
+            "version-name": MoocletDataDownloader().get_objects_by_mooclet_ids("version-name", self.mooclet_ids),
+        }
 
     def step_1_obtain_processed_data(self, var_names):
         if not self.mooclet_data:
             raise EmptyDataFrameException
             return
-        mooclets = self.mooclet_data["mooclet"]
-        mooclets = mooclets[mooclets["id"].isin(self.mooclet_data)][["id", "name"]]
+
+        mooclets = self.mooclet_ids
         values = self.mooclet_data["value"]
         values = values[values["mooclet"].isin(self.mooclet_ids)]
         values = values.sort_values(by=["learner", "mooclet", "timestamp"])
@@ -42,23 +48,31 @@ class MturkDataPipeline:
         if parameters.shape[0] > 1:
             parameters = parameters[parameters["policy"] == var_names["parameterpolicy"]]
         parameters = parameters.sort_values(by=["mooclet"])
-        parametershistory = parametershistory[parametershistory["mooclet"].isin(self.mooclet_ids)]
-        parametershistory = parametershistory.sort_values(by=["mooclet", "creation_time"])
+        if parametershistory.shape[0] > 1:
+            parametershistory = parametershistory[parametershistory["mooclet"].isin(self.mooclet_ids)]
+            parametershistory = parametershistory.sort_values(by=["mooclet", "creation_time"])
         policies = self.mooclet_data["policy"]
-        learners = sorted(values["learner"].unique())
+        learners = values["learner"].dropna()
+        learners = sorted(learners.unique())
         draws = {}
         for _draw in ["precesion_draw", "coef_draw"]:
                 draws[_draw] = values[values["variable"] == _draw]
+        contextual = {}
+        for c in var_names["contextuals"]:
+            if not values.loc[values["variable"] == c].empty:
+                contextual[c] = values[values["variable"] == c]
         self.intermediate_data = {
             "mooclets": mooclets,
             "versions": versions,
             "rewards": rewards,
+            "contextual": contextual,
             "parameters": parameters,
             "parameterhistory": parametershistory,
             "learners": learners,
             "policies": policies,
             "draws": draws,
         }
+        print(self.intermediate_data)
 
     def step_2_combine_data(self):
         # columns:
@@ -67,15 +81,18 @@ class MturkDataPipeline:
         # 4) reward
         # 5) version
         # 7) parameters
+        # 6) contextuals
         rewards = self.intermediate_data["rewards"]
         versions = self.intermediate_data["versions"]
         versions = versions.sort_values(by=["learner", "timestamp"])
+        contextual = self.intermediate_data["contextual"]
         parameters = self.intermediate_data["parameters"]
         all_draws = self.intermediate_data["draws"]
         prec_draws = all_draws["precesion_draw"]
         coef_draws = all_draws["coef_draw"]
         parametershistory = self.intermediate_data["parameterhistory"]
-        parametershistory = parametershistory.sort_values(by=["creation_time"])
+        if parametershistory.shape[0] > 1:
+            parametershistory = parametershistory.sort_values(by=["creation_time"])
         rows = []
         for learner in self.intermediate_data["learners"]:
             version_l = versions[versions["learner"] == learner]
@@ -92,6 +109,7 @@ class MturkDataPipeline:
                 row_dict["assign_t"] = version["timestamp"][v_id]
                 row_dict["next_assign_t"] = get_learner_next_assign_t(version_l, version["timestamp"][v_id])
                 reward = get_reward_in_timewindow(rewards_l, row_dict["assign_t"], row_dict["next_assign_t"])
+                row_dict["contextual"] = get_valid_contextual_values(contextual,row_dict["assign_t"])
                 if reward is not None:
                     row_dict["reward"] = reward["value"].values[0]
                     row_dict["reward_time"] = reward["timestamp"].values[0]
@@ -119,6 +137,7 @@ class MturkDataPipeline:
         # combined_df[f"is_arm{arm_early_no.split(' ')[-1]}"] = combined_df[
         #     f"is_arm{arm_early_no.split(' ')[-1]}"].astype(int)
         # self.intermediate_data["version_json"] = f"is_arm{arm_early_no.split(' ')[-1]}"
+
         combined_df = combined_df.sort_values(by=["assign_t"])
         combined_df.reset_index(inplace=True, drop=True)
         combined_df = pd.concat([combined_df.drop(['parameters'], axis=1), combined_df['parameters'].apply(pd.Series)], axis=1)
@@ -138,7 +157,7 @@ class MturkDataPipeline:
         df["variance_b_updated"] = np.NaN
         df["update_size_updated"] = np.NaN
         df["batch_group_updated"] = np.NaN
-        learners = self.mooclet_data["learner"]
+        learners = self.intermediate_data["learners"]
         obs_record = {}
         for i in df["batch_group"].unique():
             obs = df[df["batch_group"] == i]
@@ -156,8 +175,7 @@ class MturkDataPipeline:
                 continue
             for dict in obs["update_record"].values[0]:
                 round_no = var_names["reward"].split("_")[-1]
-                arm_text = self.intermediate_data[
-                               "version_json"] + f"_round_{round_no}"
+                #arm_text = self.intermediate_data["version_json"] + f"_round_{round_no}"
                 # df  -> df_learner -> df_learner_arm_value -> df_reward_value
                 record = df[df["batch_group"] == i]
                 record = record[record["learner"] == get_learner_name_by_id(learners, int(dict["user_id"]))]
@@ -219,21 +237,37 @@ class MturkDataPipeline:
 
     def __call__(self, var_names):
         self.step_0_initialize_data_downloaders()
+        print("__step__0")
         self.step_1_obtain_processed_data(var_names)
+        print("__step__1")
         self.step_2_combine_data()
+        print("__step__2")
         self.step_3_add_parameters_updates(var_names)
+        print("__step__3")
         self.step_4_add_timestamp_filters()
+        print("__step__4")
         self.step_5_save_output_data()
         self.step_6_get_summarized_data(groups=["policy", "arm"])
 
 
 if __name__ == "__main__":
-    mooclet_id = [61]
+    mooclet_id = [315]
     var_names = {
-        "reward": "f21_w5_prepare_growth",
-        "parameterpolicy": 17
+        "reward": "modular_link_mha_prototype_linkrating",
+        "parameterpolicy": 6,
+        "contextuals": [
+            "modular_link_mha_prototype_hadrecentactivitylast48hours",
+            "modular_link_mha_prototype_isweekend",
+            "modular_link_mha_prototype_timeofday",
+            "modular_link_mha_prototype_highmood",
+            "modular_link_mha_prototype_highenergy",
+            "modular_link_mha_prototype_studyday",
+            "modular_link_mha_prototype_k10",
+            "modular_link_mha_prototype_averageresponsiveness",
+            "modular_link_mha_prototype_averagecontentratingsoverall"
+        ],
     }
-    mturk_datapipeline = MturkDataPipeline(mooclet_id, True)
+    mturk_datapipeline = MturkDataPipeline(mooclet_id,False)
     mturk_datapipeline(var_names)
 
 
